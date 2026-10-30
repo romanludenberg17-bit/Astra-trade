@@ -45,6 +45,7 @@ class ScreenMonitorService : Service() {
     private var handler: Handler? = null
     private val recognizer by lazy { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
     @Volatile private var processing = false
+    @Volatile private var lastOcrAt = 0L
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
@@ -79,8 +80,10 @@ class ScreenMonitorService : Service() {
         imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
         imageReader!!.setOnImageAvailableListener({ reader ->
             val image = try { reader.acquireLatestImage() } catch (_: Exception) { null } ?: return@setOnImageAvailableListener
-            if (processing) { image.close(); return@setOnImageAvailableListener }
+            val now = System.currentTimeMillis()
+            if (processing || now - lastOcrAt < 1500L) { image.close(); return@setOnImageAvailableListener }
             processing = true
+            lastOcrAt = now
             val bitmap = imageToBitmap(image)
             image.close()
             if (bitmap == null) { processing = false; return@setOnImageAvailableListener }
