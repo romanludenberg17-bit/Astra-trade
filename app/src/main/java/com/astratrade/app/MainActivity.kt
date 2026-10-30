@@ -1,8 +1,14 @@
 package com.astratrade.app
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.media.projection.MediaProjectionManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -16,20 +22,48 @@ import androidx.compose.ui.unit.dp
 import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+    private val captureLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val service = Intent(this, ScreenMonitorService::class.java).apply {
+                action = ScreenMonitorService.ACTION_START
+                putExtra(ScreenMonitorService.EXTRA_RESULT_CODE, result.resultCode)
+                putExtra(ScreenMonitorService.EXTRA_DATA, result.data)
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(service) else startService(service)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { AstraTrader() }
+        setContent {
+            AstraTrader(
+                onStartMonitor = {
+                    val manager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    captureLauncher.launch(manager.createScreenCaptureIntent())
+                },
+                onStopMonitor = {
+                    startService(Intent(this, ScreenMonitorService::class.java).setAction(ScreenMonitorService.ACTION_STOP))
+                }
+            )
+        }
     }
 }
 
 @Composable
-fun AstraTrader() {
+fun AstraTrader(onStartMonitor: () -> Unit, onStopMonitor: () -> Unit) {
     var item by remember { mutableStateOf("AWM Dark Camo") }
     var buy by remember { mutableStateOf("0.13") }
     var sell by remember { mutableStateOf("0.18") }
     var fee by remember { mutableStateOf("20") }
     var threshold by remember { mutableStateOf("8") }
-    var status by remember { mutableStateOf("Демо-режим: реальные котировки не подключены.") }
+    var recognized by remember { mutableStateOf("ожидание первого кадра") }
+    var monitorState by remember { mutableStateOf("мониторинг выключен") }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val prefs = androidx.compose.ui.platform.LocalContext.current
+            kotlinx.coroutines.delay(1000)
+        }
+    }
     val b = buy.toDoubleOrNull() ?: 0.0
     val s = sell.toDoubleOrNull() ?: 0.0
     val net = s * (1 - (fee.toDoubleOrNull() ?: 20.0).coerceIn(0.0, 100.0) / 100)
@@ -41,12 +75,27 @@ fun AstraTrader() {
             LazyColumn(Modifier.fillMaxSize().padding(pad).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 item {
                     Text("ASTRA TRADER", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text("Standoff 2 · Market intelligence")
+                    Text("Standoff 2 · live screen monitor")
                 }
                 item {
                     Card(shape = RoundedCornerShape(20.dp)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text("АНАЛИЗ СДЕЛКИ", fontWeight = FontWeight.Bold)
+                            Text("МОНИТОРИНГ ЭКРАНА", fontWeight = FontWeight.Bold)
+                            Text(monitorState)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = onStartMonitor, modifier = Modifier.weight(1f)) { Text("НАЧАТЬ ЗАХВАТ") }
+                                OutlinedButton(onClick = onStopMonitor, modifier = Modifier.weight(1f)) { Text("СТОП") }
+                            }
+                            Text("Распознанный текст:", fontWeight = FontWeight.SemiBold)
+                            Text(recognized, style = MaterialTheme.typography.bodySmall)
+                            Text("Android покажет системный запрос на разрешение захвата. Не закрывай уведомление Astra Trade.", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+                item {
+                    Card(shape = RoundedCornerShape(20.dp)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("КАЛЬКУЛЯТОР СДЕЛКИ", fontWeight = FontWeight.Bold)
                             OutlinedTextField(item, { item = it }, label = { Text("Предмет") }, modifier = Modifier.fillMaxWidth())
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 PriceField("Покупка G", buy, { buy = it }, Modifier.weight(1f))
@@ -64,16 +113,7 @@ fun AstraTrader() {
                         }
                     }
                 }
-                item {
-                    Card {
-                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("АГЕНТ", fontWeight = FontWeight.Bold)
-                            Text(status)
-                            Button(onClick = { status = "Расчёт обновлён. Подключение источника цен — следующий этап." }, modifier = Modifier.fillMaxWidth()) { Text("ОБНОВИТЬ АНАЛИЗ") }
-                        }
-                    }
-                }
-                item { Text("MVP: без авторизации, покупок и продаж. Цены вводятся вручную; автоторговля не включена.", style = MaterialTheme.typography.bodySmall) }
+                item { Text("текущий этап: захват экрана + OCR. распознавание цен ещё не превращено в торговые сигналы; покупки и продажи не выполняются.", style = MaterialTheme.typography.bodySmall) }
             }
         }
     }
