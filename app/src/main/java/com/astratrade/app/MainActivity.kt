@@ -58,10 +58,13 @@ fun AstraTrader(onStartMonitor: () -> Unit, onStopMonitor: () -> Unit) {
     var threshold by remember { mutableStateOf("8") }
     var recognized by remember { mutableStateOf("ожидание первого кадра") }
     var monitorState by remember { mutableStateOf("мониторинг выключен") }
-    LaunchedEffect(Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(context) {
         while (true) {
-            val prefs = androidx.compose.ui.platform.LocalContext.current
-            kotlinx.coroutines.delay(1000)
+            val prefs = context.getSharedPreferences(ScreenMonitorService.PREFS, Context.MODE_PRIVATE)
+            monitorState = if (prefs.getBoolean(ScreenMonitorService.KEY_RUNNING, false)) "захват активен" else "мониторинг выключен"
+            recognized = prefs.getString(ScreenMonitorService.KEY_TEXT, "ожидание первого кадра") ?: "ожидание первого кадра"
+            kotlinx.coroutines.delay(1200)
         }
     }
     val b = buy.toDoubleOrNull() ?: 0.0
