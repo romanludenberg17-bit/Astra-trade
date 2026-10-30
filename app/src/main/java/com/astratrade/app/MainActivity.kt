@@ -1,0 +1,95 @@
+package com.astratrade.app
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import java.util.Locale
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent { AstraTrader() }
+    }
+}
+
+@Composable
+fun AstraTrader() {
+    var item by remember { mutableStateOf("AWM Dark Camo") }
+    var buy by remember { mutableStateOf("0.13") }
+    var sell by remember { mutableStateOf("0.18") }
+    var fee by remember { mutableStateOf("20") }
+    var threshold by remember { mutableStateOf("8") }
+    var status by remember { mutableStateOf("Демо-режим: реальные котировки не подключены.") }
+    val b = buy.toDoubleOrNull() ?: 0.0
+    val s = sell.toDoubleOrNull() ?: 0.0
+    val net = s * (1 - (fee.toDoubleOrNull() ?: 20.0).coerceIn(0.0, 100.0) / 100)
+    val profit = net - b
+    val roi = if (b > 0) profit / b * 100 else 0.0
+    val pass = b > 0 && roi >= (threshold.toDoubleOrNull() ?: 0.0)
+    MaterialTheme(colorScheme = darkColorScheme()) {
+        Scaffold { pad ->
+            LazyColumn(Modifier.fillMaxSize().padding(pad).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                item {
+                    Text("ASTRA TRADER", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("Standoff 2 · Market intelligence")
+                }
+                item {
+                    Card(shape = RoundedCornerShape(20.dp)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text("АНАЛИЗ СДЕЛКИ", fontWeight = FontWeight.Bold)
+                            OutlinedTextField(item, { item = it }, label = { Text("Предмет") }, modifier = Modifier.fillMaxWidth())
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                PriceField("Покупка G", buy, { buy = it }, Modifier.weight(1f))
+                                PriceField("Продажа G", sell, { sell = it }, Modifier.weight(1f))
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                PriceField("Комиссия %", fee, { fee = it }, Modifier.weight(1f))
+                                PriceField("Мин. ROI %", threshold, { threshold = it }, Modifier.weight(1f))
+                            }
+                            HorizontalDivider()
+                            Line("После комиссии", money(net) + " G")
+                            Line("Чистая прибыль", money(profit) + " G")
+                            Line("ROI", money(roi) + "%")
+                            AssistChip(onClick = {}, label = { Text(if (pass) "ПРОХОДИТ ПОРОГ" else "НЕ ПРОХОДИТ ПОРОГ") })
+                        }
+                    }
+                }
+                item {
+                    Card {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("АГЕНТ", fontWeight = FontWeight.Bold)
+                            Text(status)
+                            Button(onClick = { status = "Расчёт обновлён. Подключение источника цен — следующий этап." }, modifier = Modifier.fillMaxWidth()) { Text("ОБНОВИТЬ АНАЛИЗ") }
+                        }
+                    }
+                }
+                item { Text("MVP: без авторизации, покупок и продаж. Цены вводятся вручную; автоторговля не включена.", style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+    }
+}
+
+@Composable
+fun PriceField(label: String, value: String, onValue: (String) -> Unit, modifier: Modifier) {
+    OutlinedTextField(value, onValue, label = { Text(label) }, modifier = modifier, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal))
+}
+
+@Composable
+fun Line(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label)
+        Text(value, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+fun money(value: Double) = String.format(Locale.US, "%.3f", value).trimEnd('0').trimEnd('.')
